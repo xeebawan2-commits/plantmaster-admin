@@ -4,7 +4,17 @@ const fmtBytes=n=>{let v=Number(n)||0,i=0,u=['B','KB','MB','GB','TB'];while(v>=1
 function toast(t){const x=$('#adminToast');x.textContent=t;x.classList.add('show');clearTimeout(x.t);x.t=setTimeout(()=>x.classList.remove('show'),2600)}
 function loading(t='Loading…'){$('#adminContent').innerHTML=`<div class="loading"><span class="spinner"></span><p>${esc(t)}</p></div>`}function errorView(e,retry='navigate()'){$('#adminContent').innerHTML=`<div class="error"><h2>Request failed</h2><p>${esc(e.message||e)}</p><button onclick="${retry}">Retry</button></div>`}
 function badge(v){return`<span class="badge ${esc(String(v||'').toLowerCase())}">${esc(v||'—')}</span>`}function meter(used,limit){const p=limit?Math.min(100,Math.round(Number(used)/Number(limit)*100)):0;return`<div class="meter"><i style="width:${p}%"></i></div><small>${p}%</small>`}
-async function init(){const r=await sb.auth.getSession();session=r.data.session;$('#boot').hidden=true;if(!session)return showLogin();await enter()}
+async function init(){
+  const r=await sb.auth.getSession();
+  session=r.data.session;
+  $('#boot').hidden=true;
+  if(!session) return showLogin();
+  if(pmRecovery) {
+    showResetPw();
+    return;
+  }
+  await enter();
+}
 function showLogin(){$('#login').hidden=false;$('#adminApp').hidden=true}
 $('#loginForm').onsubmit=async e=>{e.preventDefault();$('#loginMessage').textContent='Signing in…';const r=await sb.auth.signInWithPassword({email:$('#loginEmail').value.trim(),password:$('#loginPassword').value});$('#loginMessage').textContent=r.error?.message||''};
 
