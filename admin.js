@@ -7,7 +7,68 @@ function badge(v){return`<span class="badge ${esc(String(v||'').toLowerCase())}"
 async function init(){const r=await sb.auth.getSession();session=r.data.session;$('#boot').hidden=true;if(!session)return showLogin();await enter()}
 function showLogin(){$('#login').hidden=false;$('#adminApp').hidden=true}
 $('#loginForm').onsubmit=async e=>{e.preventDefault();$('#loginMessage').textContent='Signing in…';const r=await sb.auth.signInWithPassword({email:$('#loginEmail').value.trim(),password:$('#loginPassword').value});$('#loginMessage').textContent=r.error?.message||''};
-sb.auth.onAuthStateChange(async(event,s)=>{session=s;if(event==='SIGNED_OUT')showLogin();if(event==='SIGNED_IN'&&$('#adminApp').hidden)await enter()});
+
+$('#forgotPasswordBtn').onclick = async () => {
+  const email = $('#loginEmail').value.trim();
+  if(!email) {
+    $('#loginMessage').textContent = 'Enter your email address above to reset password.';
+    return;
+  }
+  $('#loginMessage').textContent = 'Requesting reset link...';
+  const r = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname
+  });
+  if (r.error) {
+    $('#loginMessage').textContent = r.error.message;
+  } else {
+    $('#loginMessage').textContent = 'Password reset link sent to your email.';
+  }
+};
+
+
+let pmRecovery = false;
+try { pmRecovery = location.search.includes('type=recovery') || location.search.includes('code='); } catch(_){}
+
+function showResetPw() {
+  $('#login').hidden = true;
+  $('#adminApp').hidden = true;
+  const rp = $('#resetPw');
+  if(rp) rp.hidden = false;
+}
+
+if ($('#resetPwForm')) {
+  $('#resetPwForm').onsubmit = async e => {
+    e.preventDefault();
+    const p1 = $('#rpw1').value, p2 = $('#rpw2').value;
+    if(p1.length < 8) return $('#rpwMsg').textContent = 'Password must be at least 8 characters';
+    if(p1 !== p2) return $('#rpwMsg').textContent = 'Passwords do not match';
+    $('#rpwMsg').textContent = 'Setting password...';
+    const {error} = await sb.auth.updateUser({password: p1});
+    if (error) {
+      $('#rpwMsg').textContent = error.message;
+      return;
+    }
+    $('#rpwMsg').textContent = '';
+    $('#resetPw').hidden = true;
+    pmRecovery = false;
+    history.replaceState({}, document.title, location.pathname);
+    toast('✓ Password updated successfully.');
+    await enter();
+  };
+}
+
+sb.auth.onAuthStateChange(async(event,s)=>{
+  session=s;
+  if(event==='SIGNED_OUT') showLogin();
+  if(event==='SIGNED_IN' && $('#adminApp').hidden) {
+    if(pmRecovery) {
+      showResetPw();
+      return;
+    }
+    await enter();
+  }
+});
+
 async function enter(){user=session?.user;const r=await sb.from('platform_admins').select('*').eq('user_id',user.id).eq('active',true).maybeSingle();if(r.error||!r.data){await sb.auth.signOut();$('#loginMessage').textContent='This account is not an active platform administrator.';return}admin=r.data;await sb.from('platform_admins').update({last_login_at:new Date().toISOString()}).eq('user_id',user.id);$('#login').hidden=true;$('#adminApp').hidden=false;$('#adminIdentity').textContent=`${admin.display_name||user.email} • ${admin.admin_role}`;bindNav();history.replaceState({admin:true,route:'dashboard'},'');navigate('dashboard',false)}
 function bindNav(){$$('[data-route]').forEach(b=>b.onclick=()=>navigate(b.dataset.route));$('#drawerToggle').onclick=$('#mobileMenu').onclick=()=>$('#adminDrawer').classList.toggle('open');$('#adminLogout').onclick=()=>sb.auth.signOut();window.navigate=navigate}
 window.addEventListener('popstate',async e=>{if($('#adminModal')?.open){$('#adminModal').close();return}const target=e.state?.route;if(target){handlingPop=true;try{await navigate(target,false)}finally{handlingPop=false}}});
