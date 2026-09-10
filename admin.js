@@ -136,6 +136,7 @@ window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-gr
   if(action==='delete_user'){
     const conf=prompt('Type DELETE USER to permanently delete this account:');
     if(conf!=='DELETE USER')return;
+    toast('Deleting user...');
     const r=await sb.rpc('platform_delete_user',{p_user_id:uid, p_reason:reason});
     if(r.error) return toast(r.error.message);
     toast('User permanently deleted');
@@ -145,7 +146,7 @@ window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-gr
     if(r.error) return toast(r.error.message);
     toast(ban ? 'User suspended' : 'User access restored');
   }
-  accountPage();
+  setTimeout(accountPage, 1000);
 };
 async function usagePage(orgId=null){if(!companies.length){const c=await sb.rpc('control_companies',{p_search:null,p_status:null});companies=c.data||[]}toolbar('Usage & Quotas','Per-company counters, limits, bonuses and auditable corrections',`<button onclick="usageAdjustment('${orgId||''}')">Adjust Usage</button>`);const r=await sb.rpc('control_usage',{p_organization_id:orgId||null});if(r.error)throw r.error;$('#adminContent').innerHTML=`<div class="card">${(r.data||[]).map(x=>`<div class="usage-row"><div><b>${esc(x.company)}</b><small>${esc(x.metric)} • ${x.period_start}</small></div><div>${meter(x.quantity,x.plan_limit)}<small>${fmtNum(x.quantity)} / ${x.plan_limit==null?'Custom':fmtNum(x.plan_limit)}</small></div><button onclick="usageAdjustment('${x.organization_id}','${esc(x.metric)}')">Adjust</button></div>`).join('')||'<div class="empty">No current usage counters.</div>'}</div>`}
 window.usageAdjustment=(orgId='',metric='ai_requests')=>openModal('Auditable Usage Adjustment',`<div class="form-grid"><label>Company<select name="org">${companies.length?companies.map(c=>`<option value="${c.organization_id}" ${c.organization_id===orgId?'selected':''}>${esc(c.name)}</option>`).join(''):'<option value="'+orgId+'">Selected company</option>'}</select></label><label>Metric<input name="metric" value="${esc(metric)}"></label><label>Quantity (+ bonus / - correction)<input name="quantity" type="number" required></label><label class="span-2">Reason<textarea name="reason" required></textarea></label></div>`,async fd=>{const r=await sb.rpc('control_adjust_usage',{p_organization_id:fd.get('org'),p_metric:fd.get('metric'),p_quantity:Number(fd.get('quantity')),p_reason:fd.get('reason')});if(r.error)throw r.error;toast('Usage adjusted');usagePage(fd.get('org'))});
