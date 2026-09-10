@@ -26,8 +26,15 @@ $('#forgotPasswordBtn').onclick = async () => {
 };
 
 
+
 let pmRecovery = false;
-try { pmRecovery = location.search.includes('type=recovery') || location.hash.includes('type=recovery') || location.search.includes('code='); } catch(_){}
+try { 
+  const hash = window.location.hash || '';
+  const search = window.location.search || '';
+  if (hash.includes('type=recovery') || search.includes('type=recovery')) {
+    pmRecovery = true;
+  }
+} catch(_){}
 
 function showResetPw() {
   $('#login').hidden = true;
@@ -35,6 +42,7 @@ function showResetPw() {
   const rp = $('#resetPw');
   if(rp) rp.hidden = false;
 }
+
 
 if ($('#resetPwForm')) {
   $('#resetPwForm').onsubmit = async e => {
