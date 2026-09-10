@@ -139,6 +139,7 @@ window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-gr
     toast('Deleting user...');
     const r=await sb.rpc('platform_delete_user',{p_user_id:uid, p_reason:reason});
     if(r.error) return toast(r.error.message);
+    if(r.data !== 'Success') return toast('Error: ' + r.data);
     toast('User permanently deleted');
   } else {
     const ban = (action==='ban_user');
