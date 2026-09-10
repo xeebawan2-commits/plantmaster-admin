@@ -27,7 +27,7 @@ $('#forgotPasswordBtn').onclick = async () => {
 
 
 let pmRecovery = false;
-try { pmRecovery = location.search.includes('type=recovery') || location.search.includes('code='); } catch(_){}
+try { pmRecovery = location.search.includes('type=recovery') || location.hash.includes('type=recovery') || location.search.includes('code='); } catch(_){}
 
 function showResetPw() {
   $('#login').hidden = true;
