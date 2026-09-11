@@ -1,10 +1,10 @@
 
+
 document.addEventListener('click', async (e) => {
   if (e.target.matches('button.danger') && e.target.textContent === 'Delete') {
     e.preventDefault();
     e.stopPropagation();
     
-    // Attempt to extract the user ID from the onclick attribute
     const onclickStr = e.target.getAttribute('onclick') || '';
     let uid = '';
     if (onclickStr.includes("doAccountDelete('")) {
@@ -18,25 +18,35 @@ document.addEventListener('click', async (e) => {
        return;
     }
     
-    alert('INTERCEPTED DELETE CLICK! User ID: ' + uid);
-    
     const conf = prompt('Type DELETE USER to permanently delete this account:');
     if (conf !== 'DELETE USER') return;
     
     const reason = prompt('Administrative reason:') || 'Platform Admin override';
     
     try {
+        alert('Step 1: Contacting Supabase RPC...');
+        if (typeof sb === 'undefined') {
+            alert('FATAL: sb (Supabase client) is completely missing from this scope!');
+            return;
+        }
+        
         const r = await sb.rpc('platform_delete_user', {p_user_id: uid, p_reason: reason});
+        
+        alert('Step 2: Supabase replied!');
         alert('DB RESPONSE: ' + JSON.stringify(r));
+        
         if (r.error) return alert('DB ERROR: ' + r.error.message);
         if (r.data !== 'Success') return alert('SQL ERROR: ' + r.data);
-        alert('User successfully deleted!');
+        
+        alert('Step 3: User successfully deleted!');
         setTimeout(() => window.location.reload(), 500);
     } catch (err) {
-        alert('FATAL JS ERROR: ' + err.message);
+        alert('FATAL JS CATCH BLOCK ERROR: ' + err.message + "
+Line: " + err.stack);
     }
   }
 }, true);
+
 
 import{createClient}from'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';import{SUPABASE_URL,SUPABASE_ANON_KEY,FILE_BUCKET,CUSTOMER_APP_URL}from'./config.js';
 const sb=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let session,user,admin,route='dashboard',companies=[],plans=[],accounts=[],currentTicket=null,modalHandler=null,handlingPop=false;
