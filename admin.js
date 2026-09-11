@@ -1,3 +1,43 @@
+
+document.addEventListener('click', async (e) => {
+  if (e.target.matches('button.danger') && e.target.textContent === 'Delete') {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    // Attempt to extract the user ID from the onclick attribute
+    const onclickStr = e.target.getAttribute('onclick') || '';
+    let uid = '';
+    if (onclickStr.includes("doAccountDelete('")) {
+      uid = onclickStr.split("doAccountDelete('")[1].split("')")[0];
+    } else if (onclickStr.includes("accountAction('")) {
+      uid = onclickStr.split("accountAction('")[1].split("'")[0];
+    }
+    
+    if (!uid) {
+       alert("CRITICAL UI ERROR: Could not find user ID on the button!");
+       return;
+    }
+    
+    alert('INTERCEPTED DELETE CLICK! User ID: ' + uid);
+    
+    const conf = prompt('Type DELETE USER to permanently delete this account:');
+    if (conf !== 'DELETE USER') return;
+    
+    const reason = prompt('Administrative reason:') || 'Platform Admin override';
+    
+    try {
+        const r = await sb.rpc('platform_delete_user', {p_user_id: uid, p_reason: reason});
+        alert('DB RESPONSE: ' + JSON.stringify(r));
+        if (r.error) return alert('DB ERROR: ' + r.error.message);
+        if (r.data !== 'Success') return alert('SQL ERROR: ' + r.data);
+        alert('User successfully deleted!');
+        setTimeout(() => window.location.reload(), 500);
+    } catch (err) {
+        alert('FATAL JS ERROR: ' + err.message);
+    }
+  }
+}, true);
+
 import{createClient}from'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';import{SUPABASE_URL,SUPABASE_ANON_KEY,FILE_BUCKET,CUSTOMER_APP_URL}from'./config.js';
 const sb=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let session,user,admin,route='dashboard',companies=[],plans=[],accounts=[],currentTicket=null,modalHandler=null,handlingPop=false;
 const fmtBytes=n=>{let v=Number(n)||0,i=0,u=['B','KB','MB','GB','TB'];while(v>=1024&&i<u.length-1){v/=1024;i++}return`${v<10&&i?v.toFixed(1):Math.round(v)} ${u[i]}`},fmtNum=n=>new Intl.NumberFormat().format(Number(n)||0),date=v=>v?new Date(v).toLocaleString():'—';
