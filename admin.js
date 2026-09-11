@@ -1,3 +1,4 @@
+const sb=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;
 
 
 document.addEventListener('click', async (e) => {
@@ -49,7 +50,7 @@ Line: " + err.stack);
 
 
 import{createClient}from'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';import{SUPABASE_URL,SUPABASE_ANON_KEY,FILE_BUCKET,CUSTOMER_APP_URL}from'./config.js';
-const sb=createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}}),$=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let session,user,admin,route='dashboard',companies=[],plans=[],accounts=[],currentTicket=null,modalHandler=null,handlingPop=false;
+','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));let session,user,admin,route='dashboard',companies=[],plans=[],accounts=[],currentTicket=null,modalHandler=null,handlingPop=false;
 const fmtBytes=n=>{let v=Number(n)||0,i=0,u=['B','KB','MB','GB','TB'];while(v>=1024&&i<u.length-1){v/=1024;i++}return`${v<10&&i?v.toFixed(1):Math.round(v)} ${u[i]}`},fmtNum=n=>new Intl.NumberFormat().format(Number(n)||0),date=v=>v?new Date(v).toLocaleString():'—';
 function toast(t){const x=$('#adminToast');x.textContent=t;x.classList.add('show');clearTimeout(x.t);x.t=setTimeout(()=>x.classList.remove('show'),2600)}
 function loading(t='Loading…'){$('#adminContent').innerHTML=`<div class="loading"><span class="spinner"></span><p>${esc(t)}</p></div>`}function errorView(e,retry='navigate()'){$('#adminContent').innerHTML=`<div class="error"><h2>Request failed</h2><p>${esc(e.message||e)}</p><button onclick="${retry}">Retry</button></div>`}
