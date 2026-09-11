@@ -136,11 +136,24 @@ window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-gr
   if(action==='delete_user'){
     const conf=prompt('Type DELETE USER to permanently delete this account:');
     if(conf!=='DELETE USER')return;
+    
+    // VERY LOUD ALERT SO WE KNOW THIS CODE IS RUNNING
+    alert('Attempting to delete user ID: ' + uid);
+    
     toast('Deleting user...');
-    const r=await sb.rpc('platform_delete_user',{p_user_id:uid, p_reason:reason});
-    if(r.error) return toast(r.error.message);
-    if(r.data !== 'Success') return toast('Error: ' + r.data);
-    toast('User permanently deleted');
+    try {
+        const r=await sb.rpc('platform_delete_user',{p_user_id:uid, p_reason:reason});
+        
+        // Show EXACTLY what Supabase returns
+        alert('Supabase returned: ' + JSON.stringify(r));
+        
+        if(r.error) return toast(r.error.message);
+        if(r.data !== 'Success') return toast('Error: ' + r.data);
+        
+        toast('User permanently deleted');
+    } catch (err) {
+        alert('CRITICAL ERROR: ' + err.message);
+    }
   } else {
     const ban = (action==='ban_user');
     const r=await sb.rpc('platform_ban_user',{p_user_id:uid, p_reason:reason, p_ban:ban});
