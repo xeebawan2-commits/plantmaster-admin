@@ -130,36 +130,39 @@ try {
   throw Error('Features JSON is invalid');
 }const n=k=>Number(fd.get(k))||0,r=await sb.rpc('control_save_plan',{p_code:fd.get('code'),p_name:fd.get('name'),p_description:fd.get('description'),p_price_monthly:n('monthly'),p_price_yearly:n('yearly'),p_max_workers:n('workers'),p_max_plants:n('plants'),p_storage:n('storage'),p_bandwidth:n('bandwidth'),p_max_files:n('files'),p_max_file:n('file_size'),p_ai_month:n('ai_month'),p_ai_day:n('ai_day'),p_ai_minute:n('ai_minute'),p_input_tokens:n('input_tokens'),p_output_tokens:n('output_tokens'),p_retention:n('retention'),p_features:features,p_active:fd.get('active')==='on'});if(r.error)throw r.error;toast('Plan saved');planPage()}
 window.togglePlan=async(code,active)=>{const p=plans.find(x=>x.code===code);p.active=!active;const fd=new FormData();Object.entries({code:p.code,name:p.name,description:p.description,monthly:p.price_monthly,yearly:p.price_yearly,workers:p.max_workers,plants:p.max_plants,storage:p.max_storage_bytes,bandwidth:p.max_bandwidth_bytes_month,files:p.max_files,file_size:p.max_file_bytes,ai_month:p.ai_requests_month,ai_day:p.ai_requests_day,ai_minute:p.ai_requests_minute_user,input_tokens:p.ai_input_tokens_month,output_tokens:p.ai_output_tokens_month,retention:p.retention_days,features:JSON.stringify(p.features)}).forEach(([k,v])=>fd.set(k,v));if(p.active)fd.set('active','on');await savePlan(fd)};
-async function accountPage(search=''){toolbar('Accounts','Invite owners, reset access, deactivate, recover or delete eligible accounts',`<input id="accountSearch" placeholder="Email or name" value="${esc(search)}"><button onclick="accountPage($('#accountSearch').value)">Search</button><button class="primary" onclick="inviteOwner()">Invite Owner</button>`);const r=await sb.rpc('control_accounts',{p_search:search||null});if(r.error)throw r.error;accounts=r.data||[];$('#adminContent').innerHTML=`<div class="table-wrap"><table><thead><tr><th>User</th><th>Memberships</th><th>Created/Last sign-in</th><th>Status</th><th>Actions</th></tr></thead><tbody>${accounts.map(a=>`<tr><td><b>${esc(a.full_name||a.email)}</b><small>${esc(a.email)}<br>${a.user_id}</small></td><td>${(a.companies||[]).map(c=>`${esc(c.company)} — ${badge(c.role)}`).join('<br>')||'None'}</td><td>${date(a.created_at)}<small>${date(a.last_sign_in_at)}</small></td><td>${a.banned_until?badge('suspended'):badge('active')}</td><td><div class="actions"><button onclick="resetAccount('${a.email}')">Reset Password</button><button onclick="accountAction('${a.user_id}','${a.banned_until?'unban_user':'ban_user'}')">${a.banned_until?'Recover':'Deactivate'}</button><button class="danger" onclick="accountAction('${a.user_id}','delete_user')">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`}
-window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-grid"><label class="span-2">Owner email<input name="email" type="email" required></label><p class="span-2">The recipient creates their account and then creates their own isolated company workspace.</p></div>`,async fd=>{await adminApi({action:'invite_owner',email:fd.get('email'),redirect_to:CUSTOMER_APP_URL});toast('Owner invitation sent')});window.resetAccount=async email=>{await adminApi({action:'reset_password',email});toast('Password reset email requested')};window.accountAction=async(uid,action)=>{
-  const reason=prompt('Administrative reason:')||'Platform Admin override';
-  if(action==='delete_user'){
-    const conf=prompt('Type DELETE USER to permanently delete this account:');
-    if(conf!=='DELETE USER')return;
-    
-    // VERY LOUD ALERT SO WE KNOW THIS CODE IS RUNNING
-    alert('Attempting to delete user ID: ' + uid);
-    
-    toast('Deleting user...');
+async function accountPage(search=''){toolbar('Accounts','Invite owners, reset access, deactivate, recover or delete eligible accounts',`<input id="accountSearch" placeholder="Email or name" value="${esc(search)}"><button onclick="accountPage($('#accountSearch').value)">Search</button><button class="primary" onclick="inviteOwner()">Invite Owner</button>`);const r=await sb.rpc('control_accounts',{p_search:search||null});if(r.error)throw r.error;accounts=r.data||[];$('#adminContent').innerHTML=`<div class="table-wrap"><table><thead><tr><th>User</th><th>Memberships</th><th>Created/Last sign-in</th><th>Status</th><th>Actions</th></tr></thead><tbody>${accounts.map(a=>`<tr><td><b>${esc(a.full_name||a.email)}</b><small>${esc(a.email)}<br>${a.user_id}</small></td><td>${(a.companies||[]).map(c=>`${esc(c.company)} — ${badge(c.role)}`).join('<br>')||'None'}</td><td>${date(a.created_at)}<small>${date(a.last_sign_in_at)}</small></td><td>${a.banned_until?badge('suspended'):badge('active')}</td><td><div class="actions"><button onclick="resetAccount('${a.email}')">Reset Password</button><button onclick="accountAction('${a.user_id}','${a.banned_until?'unban_user':'ban_user'}')">${a.banned_until?'Recover':'Deactivate'}</button><button class="danger" onclick="window.doAccountDelete('${a.user_id}')">Delete</button></div></td></tr>`).join('')}</tbody></table></div>`}
+window.inviteOwner=()=>openModal('Invite New Company Owner',`<div class="form-grid"><label class="span-2">Owner email<input name="email" type="email" required></label><p class="span-2">The recipient creates their account and then creates their own isolated company workspace.</p></div>`,async fd=>{await adminApi({action:'invite_owner',email:fd.get('email'),redirect_to:CUSTOMER_APP_URL});toast('Owner invitation sent')});window.resetAccount=async email=>{await adminApi({action:'reset_password',email});toast('Password reset email requested')};
+window.doAccountDelete = async function(uid) {
     try {
-        const r=await sb.rpc('platform_delete_user',{p_user_id:uid, p_reason:reason});
+        const conf = prompt('Type DELETE USER to permanently delete this account:');
+        if (conf !== 'DELETE USER') return;
+        const reason = prompt('Administrative reason:') || 'Platform Admin override';
         
-        // Show EXACTLY what Supabase returns
-        alert('Supabase returned: ' + JSON.stringify(r));
+        alert('STARTING DELETE for user: ' + uid);
+        toast('Deleting user...');
         
-        if(r.error) return toast(r.error.message);
-        if(r.data !== 'Success') return toast('Error: ' + r.data);
+        const r = await sb.rpc('platform_delete_user', {p_user_id: uid, p_reason: reason});
+        alert('DB RESPONSE: ' + JSON.stringify(r));
+        
+        if (r.error) return toast('DB ERROR: ' + r.error.message);
+        if (r.data !== 'Success') return toast('SQL ERROR: ' + r.data);
         
         toast('User permanently deleted');
-    } catch (err) {
-        alert('CRITICAL ERROR: ' + err.message);
+        setTimeout(accountPage, 1000);
+    } catch (e) {
+        alert('CRITICAL ERROR: ' + e.message);
     }
-  } else {
-    const ban = (action==='ban_user');
-    const r=await sb.rpc('platform_ban_user',{p_user_id:uid, p_reason:reason, p_ban:ban});
-    if(r.error) return toast(r.error.message);
-    toast(ban ? 'User suspended' : 'User access restored');
+};
+
+window.accountAction=async(uid,action)=>{
+  if(action==='delete_user') {
+      return window.doAccountDelete(uid);
   }
+  const reason=prompt('Administrative reason:')||'Platform Admin override';
+  const ban = (action==='ban_user');
+  const r=await sb.rpc('platform_ban_user',{p_user_id:uid, p_reason:reason, p_ban:ban});
+  if(r.error) return toast(r.error.message);
+  toast(ban ? 'User suspended' : 'User access restored');
   setTimeout(accountPage, 1000);
 };
 async function usagePage(orgId=null){if(!companies.length){const c=await sb.rpc('control_companies',{p_search:null,p_status:null});companies=c.data||[]}toolbar('Usage & Quotas','Per-company counters, limits, bonuses and auditable corrections',`<button onclick="usageAdjustment('${orgId||''}')">Adjust Usage</button>`);const r=await sb.rpc('control_usage',{p_organization_id:orgId||null});if(r.error)throw r.error;$('#adminContent').innerHTML=`<div class="card">${(r.data||[]).map(x=>`<div class="usage-row"><div><b>${esc(x.company)}</b><small>${esc(x.metric)} • ${x.period_start}</small></div><div>${meter(x.quantity,x.plan_limit)}<small>${fmtNum(x.quantity)} / ${x.plan_limit==null?'Custom':fmtNum(x.plan_limit)}</small></div><button onclick="usageAdjustment('${x.organization_id}','${esc(x.metric)}')">Adjust</button></div>`).join('')||'<div class="empty">No current usage counters.</div>'}</div>`}
