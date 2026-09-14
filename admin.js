@@ -267,4 +267,13 @@ window.editAdministrator=uid=>{const a=(window.controlAdmins||[]).find(x=>x.user
 async function adminApi(body){const r=await sb.functions.invoke('platform-admin-api',{body});if(r.error){let d='';try{d=(await r.error.context?.json())?.error||''}catch{}throw Error(d||r.error.message)}if(r.data?.error)throw Error(r.data.error);return r.data}
 async function logAdmin(action,target_type,target_id,organization_id,reason,details={}){await sb.from('admin_action_logs').insert({admin_user_id:user.id,action,target_type,target_id,organization_id:organization_id||null,reason:reason||null,details})}
 function openModal(title,html,handler){modalHandler=handler;$('#adminModalTitle').textContent=title;$('#adminModalBody').innerHTML=html;$('#adminModalError').textContent='';const d=$('#adminModal');if(!history.state?.modal)history.pushState({admin:true,route,modal:true},'');d.showModal();return d}function closeAdminModal(){const d=$('#adminModal');if(history.state?.modal)history.back();else if(d.open)d.close()}$('#adminModalClose').onclick=$('#adminModalCancel').onclick=closeAdminModal;$('#adminModal').addEventListener('cancel',e=>{e.preventDefault();closeAdminModal()});$('#adminModalForm').onsubmit=async e=>{e.preventDefault();const f=e.target,b=$('#adminModalSave'),errBox=$('#adminModalError');errBox.textContent='';if(!f.reportValidity()){return}if(typeof modalHandler!=='function'){errBox.textContent='No handler bound to this dialog.';return}b.disabled=true;b.textContent='Saving…';try{await modalHandler(new FormData(f));closeAdminModal()}catch(err){errBox.textContent=(err&&(err.message||err.error_description||err.hint))||String(err)||'Save failed.';}finally{b.disabled=false;b.textContent='Save'}};
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js?v=1.5.0',{updateViaCache:'none'});init();
+
+/* Inline onclick runs in global scope; module functions must be exported there. */
+window.requestPage=requestPage;
+window.accountPage=accountPage;
+window.storagePage=storagePage;
+window.invitePage=invitePage;
+window.companyPage=companyPage;
+window.usagePage=usagePage;
+
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js?v=1.5.1',{updateViaCache:'none'});init();
