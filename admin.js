@@ -276,4 +276,4 @@ window.invitePage=invitePage;
 window.companyPage=companyPage;
 window.usagePage=usagePage;
 
-if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js?v=1.5.1',{updateViaCache:'none'});init();
+if('serviceWorker'in navigator)navigator.serviceWorker.register('./service-worker.js?v=1.6.0',{updateViaCache:'none'});init();

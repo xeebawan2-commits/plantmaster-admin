@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reset Control Center</title>
+<style>
+  body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f6fb;
+    font:15px/1.6 system-ui,-apple-system,"Segoe UI",sans-serif;color:#172334;padding:20px}
+  .card{width:min(460px,100%);background:#fff;border:1px solid #d6dfeb;border-radius:16px;
+    padding:26px;box-shadow:0 10px 30px #324b6b18}
+  h1{margin:0 0 6px;font-size:22px}
+  p{color:#64748b;margin:0 0 18px}
+  button{width:100%;min-height:52px;font:700 16px system-ui;color:#fff;cursor:pointer;
+    background:linear-gradient(135deg,#4f46e5,#2563eb);border:0;border-radius:12px}
+  button:disabled{opacity:.6}
+  #log{margin-top:16px;padding:12px;border-radius:10px;background:#f1f5f9;
+    font:12px/1.7 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:#334155;min-height:80px}
+  .ok{color:#047857;font-weight:700}
+  a{display:block;margin-top:14px;text-align:center;color:#4f46e5;font-weight:700}
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>Reset Control Center</h1>
+  <p>This clears every cached file and the service worker, then reloads a clean copy from the server. Use it when the Control Center looks out of date.</p>
+  <button id="go">Clear everything and reload</button>
+  <div id="log">Ready.</div>
+  <a href="./index.html">Back to Control Center</a>
+</div>
+<script>
+const log=document.getElementById('log');
+const say=(m,ok)=>{log.innerHTML+=(ok?'<span class="ok">':'<span>')+m+'</span>\n';};
+document.getElementById('go').onclick=async function(){
+  this.disabled=true; log.textContent='';
+  try{
+    if('serviceWorker' in navigator){
+      const regs=await navigator.serviceWorker.getRegistrations();
+      say('service workers found: '+regs.length);
+      for(const r of regs){ await r.unregister(); }
+      say('service workers removed','ok');
+    }
+    if(window.caches){
+      const keys=await caches.keys();
+      say('caches found: '+keys.length+(keys.length?' ('+keys.join(', ')+')':''));
+      await Promise.all(keys.map(k=>caches.delete(k)));
+      say('caches deleted','ok');
+    }
+    try{ localStorage.clear(); sessionStorage.clear(); say('local storage cleared','ok'); }catch(e){}
+    say('');
+    say('Reloading in 2 seconds…','ok');
+    setTimeout(()=>{ location.replace('./index.html?fresh='+Date.now()); },2000);
+  }catch(e){
+    say('ERROR: '+e.message);
+    this.disabled=false;
+  }
+};
+</script>
+</body>
+</html>
