@@ -1,7 +1,7 @@
 /* PlantMaster Control Center service worker — v1.6.0
    NETWORK-FIRST for code. The previous versions were cache-first, which meant
    a stale admin.js could survive uploads and keep serving dead buttons. */
-const C='plantmaster-control-center-v1.6.0';
+const C='plantmaster-control-center-v1.7.0';
 const SHELL=['./','./index.html','./config.js','./manifest.webmanifest',
   './icons/icon-192.png','./icons/icon-512.png','./icons/maskable-512.png'];
 
