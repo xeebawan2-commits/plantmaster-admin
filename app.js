@@ -1824,7 +1824,14 @@ const ROUTES = {
 };
 const TABS = ['dashboard','companies','requests','accounts','more'];
 
-async function navigate(next){
+/* The phone's back button walks back through the panel instead of
+   leaving it. A back press closes an open dialog first. */
+let popping = false;
+
+async function navigate(next, push = true){
+  if (push && next !== route && !popping){
+    history.pushState({ pm:true, route:next }, '');
+  }
   route = next;
   $$('#tabbar button').forEach(b =>
     b.classList.toggle('active',
@@ -1832,6 +1839,27 @@ async function navigate(next){
   window.scrollTo(0,0);
   await safeRender(() => (ROUTES[route] || pageDashboard)());
 }
+
+window.addEventListener('popstate', e => {
+  /* A dialog is open: back just closes it and stays put. */
+  if ($('#modalRoot').innerHTML.trim()){
+    closeModal();
+    history.pushState({ pm:true, route }, '');
+    return;
+  }
+  const next = e.state?.route;
+  if (!next){
+    /* Nothing left in our history. Go to the dashboard once, then
+       let a second press leave the app as normal. */
+    if (route !== 'dashboard'){
+      history.pushState({ pm:true, route:'dashboard' }, '');
+      popping = true; navigate('dashboard', false).finally(()=>{ popping = false; });
+    }
+    return;
+  }
+  popping = true;
+  navigate(next, false).finally(()=>{ popping = false; });
+});
 
 $('#tabbar').addEventListener('click', e => {
   const btn = e.target.closest('button[data-route]');
@@ -1910,7 +1938,8 @@ async function boot(){
   sb.from('platform_admins').update({ last_login_at:new Date().toISOString() })
     .eq('user_id', user.id).then(()=>{}, ()=>{});
 
-  await navigate('dashboard');
+  history.replaceState({ pm:true, route:'dashboard' }, '');
+  await navigate('dashboard', false);
 }
 
 sb.auth.onAuthStateChange(event => {
