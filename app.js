@@ -82,6 +82,7 @@ function openForm({ title, intro, fields = [], submitLabel = 'Save', danger = fa
   return new Promise(resolve => {
     const body = fields.map(f => {
       if (f.heading) return `<div class="section-title">${esc(f.heading)}</div>`;
+      if (f.note) return `<p class="form-note">${f.note}</p>`;
       const req = f.required ? 'required' : '';
       const val = esc(f.value ?? '');
       const help = f.help ? `<small style="display:block;margin-top:4px">${esc(f.help)}</small>` : '';
@@ -98,7 +99,8 @@ function openForm({ title, intro, fields = [], submitLabel = 'Save', danger = fa
         return `<label class="field"><span>${esc(f.label)}</span><textarea name="${f.name}" ${req} placeholder="${esc(f.placeholder||'')}">${val}</textarea>${help}</label>`;
       }
       if (f.type === 'checkbox'){
-        return `<label class="checkline"><input type="checkbox" name="${f.name}" ${f.value?'checked':''}><span>${esc(f.label)}</span></label>`;
+        const dis = f.disabled ? 'disabled' : '';
+        return `<label class="checkline${f.disabled?' is-locked':''}"><input type="checkbox" name="${f.name}" ${f.value?'checked':''} ${dis}><span>${esc(f.label)}</span></label>`;
       }
       /* autocapitalize/autocorrect off: phone keyboards were changing
          typed confirmations and breaking the match. */
@@ -1234,11 +1236,13 @@ const ACTIONS = {
           help:`Package gives ${cur('ai_requests', base.ai_requests_month||0)}` },
 
         { heading:'Modules for this company' },
+        { note:'You can only switch OFF what their package already includes. To ADD a module, either move them to a bigger package, or edit their package in More &gt; Plans &amp; packages (that changes it for every customer on it).' },
         ...MODULES.map(m => ({
           name:'mod_'+m.key,
-          label: m.label + (baseFeat[m.key] ? '' : '  (not in their package)'),
+          label: m.label + (baseFeat[m.key] ? '' : '  — not in their package, ticking does nothing'),
           type:'checkbox',
-          value: baseFeat[m.key] ? !blocked[m.key] : false
+          value: baseFeat[m.key] ? !blocked[m.key] : false,
+          disabled: !baseFeat[m.key]
         })),
 
         { heading:'Reason' },

@@ -499,3 +499,12 @@ button.stat.tile:active{filter:brightness(1.18)}
   .modal{border-radius:var(--radius);border-bottom:1px solid var(--line);animation:none}
   .actions button{flex:0 1 auto}
 }
+
+/* Per-company module list: a module the package does not include
+   cannot be granted here, so it is shown locked rather than
+   looking like a tick that failed to save. */
+.checkline.is-locked{opacity:.45;cursor:not-allowed}
+.checkline.is-locked input{cursor:not-allowed}
+.form-note{margin:-2px 0 12px;padding:10px 12px;border:1px solid #272c33;
+  border-left:3px solid #f5a524;border-radius:8px;background:#181c21;
+  color:#8790a0;font-size:12.5px;line-height:1.5}
