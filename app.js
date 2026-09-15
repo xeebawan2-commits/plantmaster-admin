@@ -615,7 +615,7 @@ const MODULES = [
   { key:'permits',                label:'Work permits' },
   { key:'incidents',              label:'Incident reporting' },
   { key:'support',                label:'In-app support & complaints' },
-  { key:'white_label',            label:'Company branding (own logo, name & colours)' }
+  { key:'white_label',            label:'Company profile & branding (own name, logo, colours, contact details)' }
 ];
 
 function planFields(p = {}){
@@ -1195,10 +1195,16 @@ const ACTIONS = {
     const base = plans.find(p => p.code === c.plan_code) || {};
     const baseFeat = base.features || {};
 
-    const [{ data: ov }, { data: blocks }] = await Promise.all([
+    const [{ data: ov }, { data: blocks }, grantsRes] = await Promise.all([
       sb.from('quota_overrides').select('*').eq('organization_id', d.id),
-      sb.from('company_feature_blocks').select('*').eq('organization_id', d.id)
+      sb.from('company_feature_blocks').select('*').eq('organization_id', d.id),
+      sb.from('company_feature_grants').select('*').eq('organization_id', d.id)
     ]);
+    /* Grants are the newer half. If script 10 has not been run the
+       table is missing — carry on rather than break the editor. */
+    const grantsMissing = !!grantsRes.error;
+    const granted = {};
+    (grantsRes.data||[]).forEach(g => { if (g.granted !== false) granted[g.feature] = true; });
 
     const extras = {};
     (ov||[]).forEach(o => {
@@ -1214,7 +1220,8 @@ const ACTIONS = {
 
     await openForm({
       title: `${c.name}`,
-      intro: `Everything here affects <b>${esc(c.name)}</b> only. Changing a package in More &gt; Plans &amp; packages affects every customer on it.`,
+      intro: `Everything here affects <b>${esc(c.name)}</b> only. Changing a package in More &gt; Plans &amp; packages affects every customer on it.`
+        + (grantsMissing ? `<br><b style="color:#f5a524">Run 10-COMPANY-FEATURES.sql in Supabase to enable adding modules per company. Until then you can only remove them.</b>` : ''),
       submitLabel: 'Save',
       fields: [
         { heading:'Package' },
@@ -1236,13 +1243,12 @@ const ACTIONS = {
           help:`Package gives ${cur('ai_requests', base.ai_requests_month||0)}` },
 
         { heading:'Modules for this company' },
-        { note:'You can only switch OFF what their package already includes. To ADD a module, either move them to a bigger package, or edit their package in More &gt; Plans &amp; packages (that changes it for every customer on it).' },
+        { note:'Tick to give this company a module their package does not include. Untick to take away one it does. Either way it affects <b>this company only</b> — the package itself is unchanged.' },
         ...MODULES.map(m => ({
           name:'mod_'+m.key,
-          label: m.label + (baseFeat[m.key] ? '' : '  — not in their package, ticking does nothing'),
+          label: m.label + (baseFeat[m.key] ? '' : (granted[m.key] ? '  — extra for this company' : '  — not in their package')),
           type:'checkbox',
-          value: baseFeat[m.key] ? !blocked[m.key] : false,
-          disabled: !baseFeat[m.key]
+          value: granted[m.key] ? true : (baseFeat[m.key] ? !blocked[m.key] : false)
         })),
 
         { heading:'Reason' },
@@ -1272,25 +1278,51 @@ const ACTIONS = {
           if (error) throw new Error(`Could not add extra ${metric}: ${errText(error)}`);
         }
 
-        /* A module the package grants but you unticked becomes a block.
-           A module you re-ticked has its block removed. */
+        /* Four cases per module, for THIS company only:
+             in package + unticked  -> write a block
+             in package + re-ticked -> remove the block
+             not in package + ticked   -> write a grant
+             not in package + unticked -> remove the grant   */
         for (const m of MODULES){
-          const wants = !!f['mod_'+m.key];
-          const inPlan = !!baseFeat[m.key];
+          const wants     = !!f['mod_'+m.key];
+          const inPlan    = !!baseFeat[m.key];
           const isBlocked = !!blocked[m.key];
+          const isGranted = !!granted[m.key];
 
-          if (inPlan && !wants && !isBlocked){
-            const { error } = await sb.from('company_feature_blocks').upsert({
-              organization_id: d.id, feature: m.key, blocked: true,
-              reason: f.reason, blocked_by: user.id,
-              updated_at: new Date().toISOString()
-            });
-            if (error) throw new Error(`Could not turn off ${m.label}: ${errText(error)}`);
-          }
-          if (wants && isBlocked){
-            const { error } = await sb.from('company_feature_blocks')
-              .delete().eq('organization_id', d.id).eq('feature', m.key);
-            if (error) throw new Error(`Could not turn on ${m.label}: ${errText(error)}`);
+          if (inPlan){
+            if (!wants && !isBlocked){
+              const { error } = await sb.from('company_feature_blocks').upsert({
+                organization_id: d.id, feature: m.key, blocked: true,
+                reason: f.reason, blocked_by: user.id,
+                updated_at: new Date().toISOString()
+              });
+              if (error) throw new Error(`Could not turn off ${m.label}: ${errText(error)}`);
+            }
+            if (wants && isBlocked){
+              const { error } = await sb.from('company_feature_blocks')
+                .delete().eq('organization_id', d.id).eq('feature', m.key);
+              if (error) throw new Error(`Could not turn on ${m.label}: ${errText(error)}`);
+            }
+            /* A module back in the package no longer needs a grant. */
+            if (isGranted && !grantsMissing){
+              await sb.from('company_feature_grants')
+                .delete().eq('organization_id', d.id).eq('feature', m.key);
+            }
+          } else {
+            if (wants && !isGranted){
+              if (grantsMissing) throw new Error('Run 10-COMPANY-FEATURES.sql in Supabase before adding modules per company.');
+              const { error } = await sb.from('company_feature_grants').upsert({
+                organization_id: d.id, feature: m.key, granted: true,
+                reason: f.reason, granted_by: user.id,
+                updated_at: new Date().toISOString()
+              });
+              if (error) throw new Error(`Could not add ${m.label}: ${errText(error)}`);
+            }
+            if (!wants && isGranted && !grantsMissing){
+              const { error } = await sb.from('company_feature_grants')
+                .delete().eq('organization_id', d.id).eq('feature', m.key);
+              if (error) throw new Error(`Could not remove ${m.label}: ${errText(error)}`);
+            }
           }
         }
       }
@@ -1445,7 +1477,7 @@ const ACTIONS = {
   async resetPassword(d){
     const a = STORE.accounts[d.id] || {};
     if (!a.email) return toast('No email on this account','bad');
-    const { error } = await sb.auth.resetPasswordForEmail(a.email, { redirectTo: CUSTOMER_APP_URL });
+    const { error } = await sb.auth.resetPasswordForEmail(a.email, { redirectTo: CUSTOMER_APP_URL + '/index.html' });
     if (error) throw error;
     toast('Reset email sent to ' + a.email);
   },
@@ -1893,12 +1925,22 @@ $('#loginForm').onsubmit = async e => {
   }
 };
 
+function isRecoveryUrl(){
+  try{
+    const q = location.search || '', h = location.hash || '';
+    return q.includes('type=recovery') || q.includes('code=')
+        || h.includes('type=recovery') || (h.includes('access_token') && h.includes('recovery'));
+  }catch(_){ return false }
+}
+
 $('#forgotBtn').onclick = async () => {
   const email = $('#loginEmail').value.trim(), err = $('#loginError');
   if (!email){ err.textContent='Type your email first, then tap Forgot password.'; err.hidden=false; return; }
   sessionStorage.setItem('pmRecovery','1');
-  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin });
-  err.textContent = error ? error.message : 'Check your email for the reset link.';
+  const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+  err.textContent = error
+    ? error.message
+    : 'Reset link sent to ' + email + '. If nothing arrives within a few minutes, check spam — and see LOGIN-EMAILS.txt, the project may still be on Supabase\'s built-in mailer which only delivers to your own address.';
   err.hidden = false;
 };
 
@@ -1917,7 +1959,11 @@ $('#logoutBtn').onclick = () => sb.auth.signOut();
 async function boot(){
   const { data:{ session } } = await sb.auth.getSession();
   if (!session){ user=null; admin=null; showScreen('login'); return; }
-  if (sessionStorage.getItem('pmRecovery')==='1'){ showScreen('reset'); return; }
+  /* Recovery can be flagged three ways. The sessionStorage flag only
+     works if the link opens in the SAME browser that asked for it —
+     on a phone the email often opens in a different one, so also read
+     the URL, including the hash form. */
+  if (sessionStorage.getItem('pmRecovery')==='1' || isRecoveryUrl()){ showScreen('reset'); return; }
 
   user = session.user;
   const { data:row, error } = await sb.from('platform_admins')
