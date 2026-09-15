@@ -612,7 +612,8 @@ const MODULES = [
   { key:'people',                 label:'People, attendance & daily logs' },
   { key:'permits',                label:'Work permits' },
   { key:'incidents',              label:'Incident reporting' },
-  { key:'support',                label:'In-app support & complaints' }
+  { key:'support',                label:'In-app support & complaints' },
+  { key:'white_label',            label:'Company branding (own logo, name & colours)' }
 ];
 
 function planFields(p = {}){
