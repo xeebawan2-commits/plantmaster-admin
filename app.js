@@ -24,7 +24,7 @@ let plansCache = [];
 /* Rows are kept in JS and looked up by id.
    Nothing is round-tripped through HTML attributes, so escaping,
    stray spaces and quotes in a company name can never corrupt it. */
-const STORE = { companies:{}, accounts:{}, requests:{}, invites:{}, plans:{}, files:{} };
+const STORE = { companies:{}, accounts:{}, requests:{}, invites:{}, plans:{}, files:{}, tickets:{} };
 
 /* ---------- helpers ---------- */
 const $  = s => document.querySelector(s);
@@ -150,6 +150,15 @@ function openForm({ title, intro, fields = [], submitLabel = 'Save', danger = fa
       }
     };
   });
+}
+
+/* Replies have to go before the ticket they belong to. The column
+   name differs between installs, so try each and ignore misses. */
+async function deleteTicketMessages(ids){
+  for (const col of ['ticket_id','support_ticket_id','thread_id']){
+    const { error } = await sb.from('platform_support_messages').delete().in(col, ids);
+    if (!error) return;
+  }
 }
 
 /* Turn a Postgres error into something worth reading. */
@@ -900,15 +909,33 @@ function tableHtml(rows){
 /* ============================================================
    SUPPORT / ACTIVITY
    ============================================================ */
-async function pageSupport(){
-  view().innerHTML = head('Support','Tickets raised by customers') + skeletons();
+const TICKET_OPEN = ['new','open','in_progress','pending','reopened'];
+const ticketIsOpen = t => TICKET_OPEN.includes(String(t.status||'').toLowerCase());
+
+async function pageSupport(filter='open'){
+  view().innerHTML = head('Complaints','Tickets raised by customers') + skeletons();
+
   const { data, error } = await sb.from('platform_support_tickets')
-    .select('*').order('created_at',{ascending:false}).limit(100);
+    .select('*').order('created_at',{ascending:false}).limit(300);
   if (error) throw error;
-  const rows = data || [];
-  view().innerHTML = head('Support','Tickets raised by customers') + (rows.length ? rows.map(t => `
-    <article class="card">
-      <div class="card-head"><h3>${esc(t.subject||t.title||'Ticket')}</h3>${badge(t.status)}</div>
+
+  const all = data || [];
+  STORE.tickets = {};
+  all.forEach(t => { STORE.tickets[t.id] = t; });
+
+  const openCount   = all.filter(ticketIsOpen).length;
+  const closedCount = all.length - openCount;
+  const rows = filter==='open'   ? all.filter(ticketIsOpen)
+             : filter==='closed' ? all.filter(t => !ticketIsOpen(t))
+             : all;
+
+  const cards = rows.length ? rows.map(t => {
+    const open = ticketIsOpen(t);
+    return `<article class="card">
+      <div class="card-head">
+        <h3>${esc(t.subject||t.title||'Ticket')}</h3>
+        ${badge(t.status)}
+      </div>
       <div class="card-body">
         ${t.company_name?rowLine('Company', esc(t.company_name)):''}
         ${t.email?rowLine('From', `<span class="break">${esc(t.email)}</span>`):''}
@@ -916,7 +943,25 @@ async function pageSupport(){
         ${rowLine('Opened', fmtDateTime(t.created_at))}
         ${(t.message||t.body)?`<div style="margin-top:8px;color:var(--muted)">${esc(t.message||t.body)}</div>`:''}
       </div>
-    </article>`).join('') : empty('No support tickets.'));
+      <div class="actions">
+        ${open?`<button class="primary" data-act="resolveTicket" data-id="${esc(t.id)}">Mark resolved</button>`
+              :`<button data-act="reopenTicket" data-id="${esc(t.id)}">Reopen</button>`}
+        <button class="danger" data-act="deleteTicket" data-id="${esc(t.id)}">Delete</button>
+      </div>
+    </article>`;
+  }).join('') : empty(filter==='open' ? 'No open complaints. Nice.' : 'Nothing here.');
+
+  view().innerHTML = head('Complaints','Tickets raised by customers') + `
+    <div class="toolbar">
+      <button class="${filter==='open'?'primary':''}" data-act="ticketsOpen">Open (${openCount})</button>
+      <button class="${filter==='closed'?'primary':''}" data-act="ticketsClosed">Closed (${closedCount})</button>
+      <button class="${filter==='all'?'primary':''}" data-act="ticketsAll">All (${all.length})</button>
+    </div>
+    ${closedCount ? `<div class="card"><div class="actions tight">
+        <button class="danger block" data-act="purgeTickets">Delete all ${closedCount} closed ${closedCount===1?'complaint':'complaints'}</button>
+      </div></div>` : ''}
+    ${cards}`;
+  bindActions();
 }
 
 async function pageActivity(){
@@ -1461,6 +1506,55 @@ const ACTIONS = {
     toast('Password changed');
   },
 
+  /* ---------- complaints ---------- */
+  ticketsOpen  : () => safeRender(()=>pageSupport('open')),
+  ticketsClosed: () => safeRender(()=>pageSupport('closed')),
+  ticketsAll   : () => safeRender(()=>pageSupport('all')),
+
+  async resolveTicket(d){
+    const { error } = await sb.from('platform_support_tickets')
+      .update({ status:'resolved', resolved_at:new Date().toISOString() }).eq('id', d.id);
+    if (error) return showError('Could not update the complaint', explainDbError(errText(error)));
+    toast('Marked resolved');
+    await safeRender(()=>pageSupport('open'));
+  },
+
+  async reopenTicket(d){
+    const { error } = await sb.from('platform_support_tickets')
+      .update({ status:'open', resolved_at:null }).eq('id', d.id);
+    if (error) return showError('Could not reopen the complaint', explainDbError(errText(error)));
+    toast('Complaint reopened');
+    await safeRender(()=>pageSupport('open'));
+  },
+
+  async deleteTicket(d){
+    const t = STORE.tickets[d.id] || {};
+    if (!await confirmDelete('Delete complaint',
+      `Permanently deletes <b>${esc(t.subject||t.title||'this complaint')}</b> and its messages.`)) return;
+
+    await deleteTicketMessages([d.id]);
+
+    const { error } = await sb.from('platform_support_tickets').delete().eq('id', d.id);
+    if (error) return showError('Could not delete the complaint', explainDbError(errText(error)));
+    toast('Complaint deleted');
+    await safeRender(()=>pageSupport('all'));
+  },
+
+  async purgeTickets(){
+    const closed = Object.values(STORE.tickets).filter(t => !ticketIsOpen(t));
+    if (!closed.length) return toast('Nothing to delete');
+    if (!await confirmDelete('Delete closed complaints',
+      `Permanently deletes all ${closed.length} closed ${closed.length===1?'complaint':'complaints'}. Open ones are kept.`,
+      'Delete all')) return;
+
+    const ids = closed.map(t => t.id);
+    await deleteTicketMessages(ids);
+    const { error } = await sb.from('platform_support_tickets').delete().in('id', ids);
+    if (error) return showError('Could not delete the complaints', explainDbError(errText(error)));
+    toast(`Deleted ${ids.length} complaints`);
+    await safeRender(()=>pageSupport('all'));
+  },
+
   /* ---------- files ---------- */
   async openFile(d){
     const url = await signedFileUrl(d.id);
@@ -1807,8 +1901,10 @@ async function boot(){
   }
 
   admin = row;
-  $('#adminName').textContent = row.display_name || user.email;
-  $('#adminRole').textContent = (row.admin_role || 'admin').replace(/_/g,' ');
+  /* Top bar stays branded. Your email is on the More tab instead
+     of over every screenshot you take. */
+  $('#adminRole').textContent =
+    (row.admin_role || 'admin').replace(/_/g,' ').replace(/^./, c => c.toUpperCase());
   showScreen('app');
 
   sb.from('platform_admins').update({ last_login_at:new Date().toISOString() })
